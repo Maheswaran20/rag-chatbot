@@ -1,7 +1,7 @@
 import os
 from langchain_community.document_loaders import PyPDFDirectoryLoader, DirectoryLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
@@ -9,25 +9,21 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join("..", ".env"))
 
-# Path to store the FAISS index (relative to backend/ where you run uvicorn)
 INDEX_PATH = "faiss_index"
 DOCS_DIR = os.path.join("..", "data", "docs")
 
-# Local embedding model — downloads once (~90MB), then runs offline
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
+# Hosted embeddings — no local model, no PyTorch, low memory
+embeddings = HuggingFaceEndpointEmbeddings(
+    model="sentence-transformers/all-MiniLM-L6-v2",
+    huggingfacehub_api_token=os.getenv("HF_TOKEN"),
 )
 
 
 def load_documents():
     docs = []
-    # Load PDFs
     pdf_loader = PyPDFDirectoryLoader(DOCS_DIR)
     docs.extend(pdf_loader.load())
-    # Load .txt files
-    txt_loader = DirectoryLoader(
-        DOCS_DIR, glob="**/*.txt", loader_cls=TextLoader
-    )
+    txt_loader = DirectoryLoader(DOCS_DIR, glob="**/*.txt", loader_cls=TextLoader)
     docs.extend(txt_loader.load())
     return docs
 
@@ -36,9 +32,7 @@ def build_index():
     docs = load_documents()
     if not docs:
         raise ValueError(f"No documents found in {DOCS_DIR}. Add a PDF or .txt file.")
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000, chunk_overlap=150
-    )
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = splitter.split_documents(docs)
     vectorstore = FAISS.from_documents(chunks, embeddings)
     vectorstore.save_local(INDEX_PATH)
@@ -48,18 +42,13 @@ def build_index():
 
 def load_index():
     if os.path.exists(INDEX_PATH):
-        return FAISS.load_local(
-            INDEX_PATH, embeddings, allow_dangerous_deserialization=True
-        )
+        return FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
     return build_index()
 
 
 def get_qa_chain():
     vectorstore = load_index()
-    llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0,
-    )
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
     return RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
