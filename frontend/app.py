@@ -9,13 +9,6 @@ st.caption("Ask questions about your documents")
 
 with st.sidebar:
     st.header("Controls")
-    if st.button("Rebuild Index"):
-        with st.spinner("Reindexing..."):
-            try:
-                r = requests.post(f"{API_URL}/reindex", timeout=120)
-                st.success("Reindexed!" if r.ok else "Failed")
-            except Exception as e:
-                st.error(f"Error: {e}")
     if st.button("Clear Chat"):
         st.session_state.messages = []
         st.rerun()
