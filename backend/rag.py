@@ -1,4 +1,5 @@
 import os
+import time
 from langchain_community.document_loaders import PyPDFDirectoryLoader, DirectoryLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -34,6 +35,33 @@ def build_index():
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = splitter.split_documents(docs)
     vectorstore = FAISS.from_documents(chunks, embeddings)
+    vectorstore.save_local(INDEX_PATH)
+    print(f"Index built: {len(chunks)} chunks from {len(docs)} documents.")
+    return vectorstore
+
+def build_index_throttled(batch_size=50, pause=30):
+    """Build the FAISS index in small batches to stay under the free-tier
+    per-minute embedding limit. Embeds `batch_size` chunks, then pauses."""
+    docs = load_documents()
+    if not docs:
+        raise ValueError(f"No documents found in {DOCS_DIR}. Add a PDF or .txt file.")
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    chunks = splitter.split_documents(docs)
+    print(f"Total chunks: {len(chunks)}")
+
+    # First batch creates the store
+    first = chunks[:batch_size]
+    vectorstore = FAISS.from_documents(first, embeddings)
+    print(f"Embedded chunks 1-{len(first)}")
+
+    # Remaining batches, with a pause between each to respect the rate limit
+    for i in range(batch_size, len(chunks), batch_size):
+        batch = chunks[i:i + batch_size]
+        print(f"Waiting {pause}s to respect rate limit...")
+        time.sleep(pause)
+        vectorstore.add_documents(batch)
+        print(f"Embedded chunks {i+1}-{i+len(batch)}")
+
     vectorstore.save_local(INDEX_PATH)
     print(f"Index built: {len(chunks)} chunks from {len(docs)} documents.")
     return vectorstore
