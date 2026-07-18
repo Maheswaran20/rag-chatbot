@@ -1,6 +1,6 @@
 import os
 from langchain_community.document_loaders import PyPDFDirectoryLoader, DirectoryLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
@@ -12,7 +12,6 @@ load_dotenv(dotenv_path=os.path.join("..", ".env"))
 INDEX_PATH = "faiss_index"
 DOCS_DIR = os.path.join("..", "data", "docs")
 
-# Hosted embeddings — no local model, no PyTorch, low memory
 embeddings = HuggingFaceEndpointEmbeddings(
     model="sentence-transformers/all-MiniLM-L6-v2",
     huggingfacehub_api_token=os.getenv("HF_TOKEN"),
